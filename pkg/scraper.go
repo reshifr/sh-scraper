@@ -3,19 +3,15 @@ package scraper
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"time"
-)
-
-const (
-	defaultTimeout = time.Duration(8 * time.Second)
-	unixSource     = "unix.stackexchange.com"
+	"net/url"
 )
 
 type scraper struct {
-	client http.Client
+	client *http.Client
 }
 
 type question struct {
@@ -76,58 +72,73 @@ type answer struct {
 	QuotaRemaining int  `json:"quota_remaining"`
 }
 
-func (this *scraper) init(timeout time.Duration) {
-	this.client = http.Client{Timeout: timeout}
+func (this *scraper) open() {
+	proxy, err := url.Parse("socks5://127.0.0.1:9050")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	this.client = &http.Client{
+		Transport: &http.Transport{Proxy: http.ProxyURL(proxy)},
+	}
 }
 
-func (this *scraper) get(endPoint, source string) []byte {
+func (this *scraper) get(endPoint, source string) ([]byte, bool) {
 	req, err := http.NewRequest("GET", endPoint, nil)
 	if err != nil {
-		log.Println(err)
-		return nil
+		log.Println("Scraper: HTTP request failed.")
+		return nil, true
 	}
 	query := req.URL.Query()
-	query.Set("order", "asc")
+	query.Set("order", "desc")
 	query.Set("sort", "votes")
 	query.Set("site", source)
 	query.Set("filter", "withbody")
 	req.URL.RawQuery = query.Encode()
 	resp, err := this.client.Do(req)
 	if err != nil {
-		log.Println(err)
-		return nil
+		log.Println("Scraper: Connection timeout.")
+		return nil, true
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, true
+	}
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Println(err)
-		return nil
+		log.Println("Scraper: Buffer reading failed.")
+		return nil, false
 	}
-	return respBody
+	return []byte(html.UnescapeString(string(respBody))), false
 }
 
-func (this *scraper) getQuestion(id uint, source string) *question {
+func (this *scraper) getQuestion(id uint) (*question, bool) {
 	endPoint := fmt.Sprintf(
 		"https://api.stackexchange.com/2.3/questions/%v", id)
-	resp := this.get(endPoint, source)
-	qst := new(question)
-	err := json.Unmarshal(resp, qst)
-	if err != nil {
-		log.Println(err)
-		return nil
+	data, miss := this.get(endPoint, "unix.stackexchange.com")
+	if miss || data == nil {
+		return nil, true
 	}
-	return qst
+	qst := &question{}
+	err := json.Unmarshal(data, qst)
+	if err != nil {
+		log.Println("Scraper: JSON parsing failed.")
+		return nil, false
+	}
+	return qst, false
 }
 
-func (this *scraper) getAnswer(id uint, source string) *answer {
+func (this *scraper) getAnswer(id uint) (*answer, bool) {
 	endPoint := fmt.Sprintf(
 		"https://api.stackexchange.com/2.3/questions/%v/answers", id)
-	resp := this.get(endPoint, source)
-	ans := new(answer)
-	err := json.Unmarshal(resp, ans)
-	if err != nil {
-		log.Println(err)
-		return nil
+	data, miss := this.get(endPoint, "unix.stackexchange.com")
+	if miss || data == nil {
+		return nil, true
 	}
-	return ans
+	ans := &answer{}
+	err := json.Unmarshal(data, ans)
+	if err != nil {
+		log.Println("Scraper: JSON parsing failed.")
+		return nil, false
+	}
+	return ans, false
 }
