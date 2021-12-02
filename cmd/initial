@@ -1,0 +1,50 @@
+#!/bin/bash
+
+DUMP='../data/dump'
+DB='../data/execl.db'
+
+find_cmdl() { # package
+  # echo $(torsocks curl -s https://ipinfo.io/ip)
+  curl \
+    --socks5 127.0.0.1:9050 \
+    -s "https://packages.debian.org/bullseye/all/$@/filelist" \
+    --compressed |
+  recode html | grep -Eo '\/usr\/bin.*$' | sed -e 's/\/usr\/bin\///g'
+}
+
+if [ ! -f "$DUMP" ]; then
+  export -f find_command
+  apt-cache pkgnames | parallel -j 192 find_cmdl > "$DUMP"
+  find '/bin' | sed '1d; s/\/bin\///' >> "$DUMP"
+  find '/usr/bin' | sed '1d; s/\/usr\/bin\///' >> "$DUMP"
+fi
+
+if [ ! -f "$DB" ]; then
+  sqlite3 "$DB" '
+    CREATE TABLE execl(
+      execs CLOB PRIMARY KEY NOT NULL
+    )'
+  sqlite3 "$DB" '
+    CREATE TABLE titlel(
+      id UNSIGNED BIG INT PRIMARY KEY NOT NULL,
+      titles CLOB NOT NULL
+    )'
+  sqlite3 "$DB" '
+    CREATE INDEX titlel_titles_index
+    ON titlel(titles)'
+  sqlite3 "$DB" '
+    CREATE TABLE tagl(
+      id UNSIGNED BIG INT,
+      tags VARCHAR(64),
+      FOREIGN KEY(id) REFERENCES titlel(id)
+    )'
+  sqlite3 "$DB" '
+    CREATE TABLE cmdl(
+      id UNSIGNED BIG INT,
+      cmds CLOB,
+      FOREIGN KEY(id) REFERENCES titlel(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+    )'
+  sqlite3 "$DB" ".import $DUMP execl" &> /dev/null
+fi
