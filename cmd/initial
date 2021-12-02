@@ -4,7 +4,6 @@ DUMP='../data/dump'
 DB='../data/execl.db'
 
 find_cmdl() { # package
-  # echo $(torsocks curl -s https://ipinfo.io/ip)
   curl \
     --socks5 127.0.0.1:9050 \
     -s "https://packages.debian.org/bullseye/all/$@/filelist" \
@@ -14,30 +13,37 @@ find_cmdl() { # package
 
 if [ ! -f "$DUMP" ]; then
   export -f find_command
+  # load from debian repository
   apt-cache pkgnames | parallel -j 192 find_cmdl > "$DUMP"
+  # load from local
   find '/bin' | sed '1d; s/\/bin\///' >> "$DUMP"
   find '/usr/bin' | sed '1d; s/\/usr\/bin\///' >> "$DUMP"
 fi
 
 if [ ! -f "$DB" ]; then
+  # create execl
   sqlite3 "$DB" '
     CREATE TABLE execl(
       execs CLOB PRIMARY KEY NOT NULL
     )'
+  # create titlel
   sqlite3 "$DB" '
     CREATE TABLE titlel(
       id UNSIGNED BIG INT PRIMARY KEY NOT NULL,
       titles CLOB NOT NULL
     )'
+  # create titlel(titles) index
   sqlite3 "$DB" '
     CREATE INDEX titlel_titles_index
     ON titlel(titles)'
+  # create tagl
   sqlite3 "$DB" '
     CREATE TABLE tagl(
       id UNSIGNED BIG INT,
       tags VARCHAR(64),
       FOREIGN KEY(id) REFERENCES titlel(id)
     )'
+  # create cmdl
   sqlite3 "$DB" '
     CREATE TABLE cmdl(
       id UNSIGNED BIG INT,
@@ -46,5 +52,6 @@ if [ ! -f "$DB" ]; then
         ON UPDATE CASCADE
         ON DELETE CASCADE
     )'
+  # import dump to execl
   sqlite3 "$DB" ".import $DUMP execl" &> /dev/null
 fi
