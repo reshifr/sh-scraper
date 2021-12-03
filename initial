@@ -1,0 +1,59 @@
+#!/bin/bash
+
+DUMP='data/dump'
+DB='data/shl.db'
+COUNT='data/count.dat'
+
+find_cmdl() { # package
+  curl \
+    --socks5 127.0.0.1:9050 \
+    -s "https://packages.debian.org/bullseye/all/$@/filelist" \
+    --compressed |
+  recode html | grep -Eo '\/usr\/bin.*$' | sed -e 's/\/usr\/bin\///g'
+}
+
+if [ ! -f "$DUMP" ]; then
+  export -f find_command
+  # load from debian repository
+  apt-cache pkgnames | parallel -j 192 find_cmdl > "$DUMP"
+  # load from local
+  find '/bin' | sed '1d; s/\/bin\///' >> "$DUMP"
+  find '/usr/bin' | sed '1d; s/\/usr\/bin\///' >> "$DUMP"
+fi
+
+# remove old db and count data
+rm -rf "$DB" "$COUNT" &> /dev/null
+# create execl
+sqlite3 "$DB" '
+  CREATE TABLE execl(
+    execs CLOB PRIMARY KEY NOT NULL
+  )'
+# create titlel
+sqlite3 "$DB" '
+  CREATE TABLE titlel(
+    titles CLOB PRIMARY KEY NOT NULL
+  )'
+# create tagl
+sqlite3 "$DB" '
+  CREATE TABLE tagl(
+    titles CLOB,
+    tags CLOB,
+    FOREIGN KEY(titles) REFERENCES titlel(titles)
+      ON UPDATE CASCADE
+      ON DELETE CASCADE
+  )'
+# create tagl(tags) index
+sqlite3 "$DB" '
+  CREATE INDEX tagl_tags_index
+  ON tagl(tags)'
+# create cmdl
+sqlite3 "$DB" '
+  CREATE TABLE cmdl(
+    titles CLOB,
+    cmds CLOB,
+    FOREIGN KEY(titles) REFERENCES titlel(titles)
+      ON UPDATE CASCADE
+      ON DELETE CASCADE
+  )'
+# import dump to execl
+sqlite3 "$DB" ".import $DUMP execl" &> /dev/null
