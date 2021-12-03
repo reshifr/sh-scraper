@@ -12,9 +12,11 @@ func main() {
 		reload = 0
 	}
 	onFailed := func() {
-		if reload == 0 || reload > 13 {
+		if reload == 0 || reload == 7 {
 			exec.Command("bash", "-c", "service tor reload").Run()
 			log.Println("TOR service reloading...")
+		} else if reload > 7 {
+			reload = 0
 		}
 		reload++
 	}
