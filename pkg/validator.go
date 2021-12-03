@@ -174,7 +174,7 @@ func Scrap(max uint64, onSucceed func(), onFailed func()) {
 		}
 		valdr.saveContent(cnt)
 		valdr.saveCount(count + 1)
-		log.Printf("Scraped (%v) succeed", count)
+		log.Printf("Scraped (%v) succeed.", count)
 		onSucceed()
 	}
 	log.Println("Scraping successfully completed.")
