@@ -55,5 +55,9 @@ sqlite3 "$DB" '
       ON UPDATE CASCADE
       ON DELETE CASCADE
   )'
+# create cmdl(cmds) index
+sqlite3 "$DB" '
+  CREATE INDEX cmdl_cmds_index
+  ON cmdl(cmds)'
 # import dump to execl
 sqlite3 "$DB" ".import $DUMP execl" &> /dev/null
