@@ -3,11 +3,11 @@ package scraper
 import (
 	"encoding/json"
 	"fmt"
-	"html"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type scraper struct {
@@ -79,6 +79,7 @@ func (this *scraper) open() {
 	}
 	this.client = &http.Client{
 		Transport: &http.Transport{Proxy: http.ProxyURL(proxy)},
+		Timeout:   time.Duration(3 * time.Second),
 	}
 }
 
@@ -108,10 +109,10 @@ func (this *scraper) get(endPoint, source string) ([]byte, bool) {
 		log.Println("Scraper: Buffer reading failed.")
 		return nil, false
 	}
-	return []byte(html.UnescapeString(string(respBody))), false
+	return respBody, false
 }
 
-func (this *scraper) getQuestion(id uint) (*question, bool) {
+func (this *scraper) getQuestion(id uint64) (*question, bool) {
 	endPoint := fmt.Sprintf(
 		"https://api.stackexchange.com/2.3/questions/%v", id)
 	data, miss := this.get(endPoint, "unix.stackexchange.com")
@@ -127,7 +128,7 @@ func (this *scraper) getQuestion(id uint) (*question, bool) {
 	return qst, false
 }
 
-func (this *scraper) getAnswer(id uint) (*answer, bool) {
+func (this *scraper) getAnswer(id uint64) (*answer, bool) {
 	endPoint := fmt.Sprintf(
 		"https://api.stackexchange.com/2.3/questions/%v/answers", id)
 	data, miss := this.get(endPoint, "unix.stackexchange.com")
