@@ -1,4 +1,4 @@
-# Sh-Scraper
+# Shell Scraper
 Scrape data from Unix & Linux Stack Exchange using The Onion Router as a web proxy.
 
 ## Dependencies
